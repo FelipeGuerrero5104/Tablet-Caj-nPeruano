@@ -7,12 +7,16 @@ export const usePedidos = () => {
   const [pedidoTemporal, setPedidoTemporal] = useState([]); // productos agregados temporalmente
 
   // Agregar producto al pedido temporal
-  const agregarProductoTemporal = ({ id_producto, cantidad, precio_unitario }) => {
-    setPedidoTemporal(prev => {
+  const agregarProductoTemporal = ({
+    id_producto,
+    cantidad,
+    precio_unitario,
+  }) => {
+    setPedidoTemporal((prev) => {
       // si el producto ya está, sumamos la cantidad
-      const existe = prev.find(p => p.id_producto === id_producto);
+      const existe = prev.find((p) => p.id_producto === id_producto);
       if (existe) {
-        return prev.map(p =>
+        return prev.map((p) =>
           p.id_producto === id_producto
             ? { ...p, cantidad: p.cantidad + cantidad }
             : p
@@ -25,7 +29,9 @@ export const usePedidos = () => {
 
   // Eliminar producto del pedido temporal
   const eliminarProductoTemporal = (id_producto) => {
-    setPedidoTemporal(prev => prev.filter(p => p.id_producto !== id_producto));
+    setPedidoTemporal((prev) =>
+      prev.filter((p) => p.id_producto !== id_producto)
+    );
   };
 
   // Confirmar pedido y guardar en base de datos
@@ -47,7 +53,9 @@ export const usePedidos = () => {
         // Crear nuevo pedido
         const { data: nuevoPedido, error: errorNuevo } = await supabase
           .from("pedidos")
-          .insert([{ id_mesa: Number(idMesa), id_usuario: idUsuario, total: 0 }])
+          .insert([
+            { id_mesa: Number(idMesa), id_usuario: idUsuario, total: 0 },
+          ])
           .select()
           .single();
         if (errorNuevo) throw errorNuevo;
@@ -57,7 +65,7 @@ export const usePedidos = () => {
       }
 
       // 2️⃣ Insertar detalle del pedido
-      const detalleInsert = pedidoTemporal.map(p => ({
+      const detalleInsert = pedidoTemporal.map((p) => ({
         id_pedido: idPedido,
         id_producto: p.id_producto,
         cantidad: p.cantidad,
@@ -100,9 +108,6 @@ export const usePedidos = () => {
     agregarProductoTemporal,
     eliminarProductoTemporal,
     confirmarPedido,
-    loading
+    loading,
   };
 };
-
-
-

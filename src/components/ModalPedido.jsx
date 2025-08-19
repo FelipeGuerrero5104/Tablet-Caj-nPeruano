@@ -3,62 +3,120 @@ import { supabase } from "../Hooks/supabase";
 
 export default function ModalAgregarPedido({ idMesa, onClose }) {
   const [productos, setProductos] = useState([]);
-  const [selectedProducto, setSelectedProducto] = useState(null);
+  const [selectedProducto, setSelectedProducto] = useState(null); // ahora guarda {id_producto, tipo}
   const [cantidad, setCantidad] = useState(1);
   const [pedidoTemporal, setPedidoTemporal] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [categoriaAbierta, setCategoriaAbierta] = useState(null);
 
-  // Traer productos activos
   useEffect(() => {
     const fetchProductos = async () => {
-      const { data, error } = await supabase
-        .from("productos")
-        .select("*")
-        .eq("activo", true);
-      if (error) console.error(error);
-      else setProductos(data);
+      try {
+        // Productos normales
+        const { data: productosData, error: errorProd } = await supabase
+          .from("productos")
+          .select("*")
+          .eq("activo", true);
+        if (errorProd) throw errorProd;
+
+        // Covers viernes con join para traer nombre y categoría
+        const { data: viernesData, error: errorViernes } = await supabase
+          .from("covers_viernes")
+          .select(`
+            id_producto,
+            precio_viernes,
+            productos!inner(nombre, categoria)
+          `);
+        if (errorViernes) throw errorViernes;
+
+        // Covers sábado con join
+        const { data: sabadoData, error: errorSabado } = await supabase
+          .from("covers_sabado")
+          .select(`
+            id_producto,
+            precio_sabado,
+            productos!inner(nombre, categoria)
+          `);
+        if (errorSabado) throw errorSabado;
+
+        // Combinar productos normales + covers
+        const productosCombinados = [
+          ...productosData.map(p => ({ ...p, tipo: "normal", precio: p.precio })),
+          ...viernesData.map(p => ({
+            id_producto: p.id_producto,
+            nombre: p.productos.nombre,
+            categoria: p.productos.categoria,
+            tipo: "viernes",
+            precio: p.precio_viernes
+          })),
+          ...sabadoData.map(p => ({
+            id_producto: p.id_producto,
+            nombre: p.productos.nombre,
+            categoria: p.productos.categoria,
+            tipo: "sabado",
+            precio: p.precio_sabado
+          }))
+        ];
+
+        setProductos(productosCombinados);
+      } catch (err) {
+        console.error(err);
+        alert("Error cargando productos");
+      }
     };
+
     fetchProductos();
   }, []);
 
-  // Agregar producto al pedido temporal
+  // Agrupar productos por categoría
+  const productosPorCategoria = productos.reduce((acc, p) => {
+    const cat = p.categoria || "Sin categoría";
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(p);
+    return acc;
+  }, {});
+
+  // Agregar al pedido temporal
   const agregarAlPedidoTemporal = () => {
     if (!selectedProducto) return alert("Selecciona un producto");
-    const producto = productos.find(p => p.id_producto === Number(selectedProducto));
+
+    const producto = productos.find(
+      p => p.id_producto === Number(selectedProducto.id_producto) && p.tipo === selectedProducto.tipo
+    );
+    if (!producto) return alert("Producto no encontrado");
+
     setPedidoTemporal(prev => {
-      const existe = prev.find(p => p.id_producto === producto.id_producto);
+      const existe = prev.find(p => p.id_producto === producto.id_producto && p.tipo === producto.tipo);
       if (existe) {
-        // sumar cantidades si ya está
-        return prev.map(p => 
-          p.id_producto === producto.id_producto
+        return prev.map(p =>
+          p.id_producto === producto.id_producto && p.tipo === producto.tipo
             ? { ...p, cantidad: p.cantidad + cantidad }
             : p
         );
       } else {
-        return [...prev, { 
-          id_producto: producto.id_producto, 
-          nombre: producto.nombre, 
-          cantidad, 
-          precio_unitario: producto.precio 
+        return [...prev, {
+          id_producto: producto.id_producto,
+          nombre: producto.nombre,
+          cantidad,
+          precio_unitario: producto.precio,
+          tipo: producto.tipo
         }];
       }
     });
+
     setSelectedProducto(null);
     setCantidad(1);
   };
 
-  // Eliminar producto del pedido temporal
-  const eliminarProductoTemporal = (id_producto) => {
-    setPedidoTemporal(prev => prev.filter(p => p.id_producto !== id_producto));
+  const eliminarProductoTemporal = (id_producto, tipo) => {
+    setPedidoTemporal(prev => prev.filter(p => !(p.id_producto === id_producto && p.tipo === tipo)));
   };
 
-  // Confirmar pedido y actualizar stock
   const confirmarPedido = async () => {
     if (pedidoTemporal.length === 0) return alert("Agrega al menos un producto");
     setLoading(true);
 
     try {
-      // 1️⃣ Verificar o crear pedido pendiente
       const { data: pedidoExistente } = await supabase
         .from("pedidos")
         .select("*")
@@ -79,7 +137,6 @@ export default function ModalAgregarPedido({ idMesa, onClose }) {
         idPedido = pedidoExistente.id_pedido;
       }
 
-      // 2️⃣ Insertar todos los productos
       const detalleInsert = pedidoTemporal.map(p => ({
         id_pedido: idPedido,
         id_producto: p.id_producto,
@@ -92,8 +149,8 @@ export default function ModalAgregarPedido({ idMesa, onClose }) {
         .insert(detalleInsert);
       if (errorDetalle) throw errorDetalle;
 
-      // 3️⃣ Descontar stock_actual
-      for (const p of pedidoTemporal) {
+      // Descontar stock solo de productos normales
+      for (const p of pedidoTemporal.filter(p => p.tipo === "normal")) {
         const { data: prodData, error: errorProd } = await supabase
           .from("productos")
           .select("stock_actual")
@@ -121,21 +178,45 @@ export default function ModalAgregarPedido({ idMesa, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-lg w-96">
+      <div className="bg-white p-6 rounded-lg w-auto">
         <h2 className="text-lg font-bold mb-4">Agregar productos a mesa {idMesa}</h2>
 
-        {/* Selector de producto */}
-        <select
-          value={selectedProducto || ""}
-          onChange={(e) => setSelectedProducto(e.target.value)}
-          className="border p-2 w-full mb-3"
-        >
-          <option value="">Selecciona un producto</option>
-          {productos.map(p => (
-            <option key={p.id_producto} value={p.id_producto}>{p.nombre}</option>
-          ))}
-        </select>
+        {/* Categorías con dropdown */}
+        <div className="mb-3 grid grid-cols-2 gap-x-8 w-full">
+          {Object.entries(productosPorCategoria).map(([categoria, prods]) => (
+            <div key={categoria} className="mb-2 flex flex-col">
+              <button
+                onClick={() =>
+                  setCategoriaAbierta(categoriaAbierta === categoria ? null : categoria)
+                }
+                className="w-full flex justify-between items-center bg-gray-200 px-3 py-2 rounded"
+              >
+                <span>{categoria}</span>
+                <span>{categoriaAbierta === categoria ? "▲" : "▼"}</span>
+              </button>
 
+              {categoriaAbierta === categoria && (
+                <ul className="border rounded mt-1 max-h-32 overflow-y-auto">
+                  {prods.map((p) => (
+                    <li
+                      key={`${p.tipo}-${p.id_producto}`}
+                      onClick={() => setSelectedProducto({ id_producto: p.id_producto, tipo: p.tipo })}
+                      className={`px-3 py-1 cursor-pointer hover:bg-blue-100 ${
+                        selectedProducto?.id_producto === p.id_producto && selectedProducto?.tipo === p.tipo
+                          ? "bg-blue-200"
+                          : ""
+                      }`}
+                    >
+                      {p.nombre} — ${p.precio} {p.tipo !== "normal" ? `(${p.tipo})` : ""}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Input cantidad */}
         <input
           type="number"
           min="1"
@@ -145,22 +226,26 @@ export default function ModalAgregarPedido({ idMesa, onClose }) {
         />
 
         <div className="flex justify-between mb-3">
-          <button onClick={agregarAlPedidoTemporal} className="px-4 py-2 bg-green-500 text-white rounded">
+          <button
+            onClick={agregarAlPedidoTemporal}
+            className="px-4 py-2 bg-green-500 text-white rounded"
+          >
             Agregar
           </button>
-          <button onClick={onClose} className="px-4 py-2 bg-gray-300 rounded">Cancelar</button>
+          <button onClick={onClose} className="px-4 py-2 bg-gray-300 rounded">
+            Cancelar
+          </button>
         </div>
 
-        {/* Lista de productos agregados */}
         {pedidoTemporal.length > 0 && (
           <div className="mb-3">
             <h3 className="font-bold mb-1">Productos agregados:</h3>
             <ul className="max-h-40 overflow-y-auto border p-2">
               {pedidoTemporal.map((p, idx) => (
-                <li key={idx} className="flex justify-between">
-                  {p.nombre} x {p.cantidad}
-                  <button 
-                    onClick={() => eliminarProductoTemporal(p.id_producto)}
+                <li key={`${p.tipo}-${idx}`} className="flex justify-between">
+                  {p.nombre} x {p.cantidad} — ${p.precio_unitario}
+                  <button
+                    onClick={() => eliminarProductoTemporal(p.id_producto, p.tipo)}
                     className="text-red-500 ml-2"
                   >
                     ✕
@@ -182,5 +267,7 @@ export default function ModalAgregarPedido({ idMesa, onClose }) {
     </div>
   );
 }
+
+
 
 
