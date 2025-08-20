@@ -182,7 +182,7 @@ export default function ModalAgregarPedido({ idMesa, onClose }) {
         <h2 className="text-lg font-bold mb-4">Agregar productos a mesa {idMesa}</h2>
 
         {/* Categorías con dropdown */}
-        <div className="mb-3 grid grid-cols-2 gap-x-8 w-full">
+        <div className="mb-3 grid grid-cols-3 gap-x-8 w-full">
           {Object.entries(productosPorCategoria).map(([categoria, prods]) => (
             <div key={categoria} className="mb-2 flex flex-col">
               <button
