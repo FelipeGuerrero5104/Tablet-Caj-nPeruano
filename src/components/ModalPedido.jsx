@@ -20,9 +20,9 @@ export default function ModalAgregarPedido({ idMesa, onClose }) {
         if (errorProd) throw errorProd;
 
         // Covers viernes con join para traer nombre y categoría
-        const { data: viernesData, error: errorViernes } = await supabase
-          .from("covers_viernes")
-          .select(`
+        const { data: viernesData, error: errorViernes } = await supabase.from(
+          "covers_viernes"
+        ).select(`
             id_producto,
             precio_viernes,
             productos!inner(nombre, categoria)
@@ -30,9 +30,9 @@ export default function ModalAgregarPedido({ idMesa, onClose }) {
         if (errorViernes) throw errorViernes;
 
         // Covers sábado con join
-        const { data: sabadoData, error: errorSabado } = await supabase
-          .from("covers_sabado")
-          .select(`
+        const { data: sabadoData, error: errorSabado } = await supabase.from(
+          "covers_sabado"
+        ).select(`
             id_producto,
             precio_sabado,
             productos!inner(nombre, categoria)
@@ -41,21 +41,25 @@ export default function ModalAgregarPedido({ idMesa, onClose }) {
 
         // Combinar productos normales + covers
         const productosCombinados = [
-          ...productosData.map(p => ({ ...p, tipo: "normal", precio: p.precio })),
-          ...viernesData.map(p => ({
+          ...productosData.map((p) => ({
+            ...p,
+            tipo: "normal",
+            precio: p.precio,
+          })),
+          ...viernesData.map((p) => ({
             id_producto: p.id_producto,
             nombre: p.productos.nombre,
             categoria: p.productos.categoria,
             tipo: "viernes",
-            precio: p.precio_viernes
+            precio: p.precio_viernes,
           })),
-          ...sabadoData.map(p => ({
+          ...sabadoData.map((p) => ({
             id_producto: p.id_producto,
             nombre: p.productos.nombre,
             categoria: p.productos.categoria,
             tipo: "sabado",
-            precio: p.precio_sabado
-          }))
+            precio: p.precio_sabado,
+          })),
         ];
 
         setProductos(productosCombinados);
@@ -81,26 +85,34 @@ export default function ModalAgregarPedido({ idMesa, onClose }) {
     if (!selectedProducto) return alert("Selecciona un producto");
 
     const producto = productos.find(
-      p => p.id_producto === Number(selectedProducto.id_producto) && p.tipo === selectedProducto.tipo
+      (p) =>
+        p.id_producto === Number(selectedProducto.id_producto) &&
+        p.tipo === selectedProducto.tipo
     );
     if (!producto) return alert("Producto no encontrado");
 
-    setPedidoTemporal(prev => {
-      const existe = prev.find(p => p.id_producto === producto.id_producto && p.tipo === producto.tipo);
+    setPedidoTemporal((prev) => {
+      const existe = prev.find(
+        (p) =>
+          p.id_producto === producto.id_producto && p.tipo === producto.tipo
+      );
       if (existe) {
-        return prev.map(p =>
+        return prev.map((p) =>
           p.id_producto === producto.id_producto && p.tipo === producto.tipo
             ? { ...p, cantidad: p.cantidad + cantidad }
             : p
         );
       } else {
-        return [...prev, {
-          id_producto: producto.id_producto,
-          nombre: producto.nombre,
-          cantidad,
-          precio_unitario: producto.precio,
-          tipo: producto.tipo
-        }];
+        return [
+          ...prev,
+          {
+            id_producto: producto.id_producto,
+            nombre: producto.nombre,
+            cantidad,
+            precio_unitario: producto.precio,
+            tipo: producto.tipo,
+          },
+        ];
       }
     });
 
@@ -109,11 +121,14 @@ export default function ModalAgregarPedido({ idMesa, onClose }) {
   };
 
   const eliminarProductoTemporal = (id_producto, tipo) => {
-    setPedidoTemporal(prev => prev.filter(p => !(p.id_producto === id_producto && p.tipo === tipo)));
+    setPedidoTemporal((prev) =>
+      prev.filter((p) => !(p.id_producto === id_producto && p.tipo === tipo))
+    );
   };
 
   const confirmarPedido = async () => {
-    if (pedidoTemporal.length === 0) return alert("Agrega al menos un producto");
+    if (pedidoTemporal.length === 0)
+      return alert("Agrega al menos un producto");
     setLoading(true);
 
     try {
@@ -137,11 +152,11 @@ export default function ModalAgregarPedido({ idMesa, onClose }) {
         idPedido = pedidoExistente.id_pedido;
       }
 
-      const detalleInsert = pedidoTemporal.map(p => ({
+      const detalleInsert = pedidoTemporal.map((p) => ({
         id_pedido: idPedido,
         id_producto: p.id_producto,
         cantidad: p.cantidad,
-        precio_unitario: p.precio_unitario
+        precio_unitario: p.precio_unitario,
       }));
 
       const { error: errorDetalle } = await supabase
@@ -150,7 +165,7 @@ export default function ModalAgregarPedido({ idMesa, onClose }) {
       if (errorDetalle) throw errorDetalle;
 
       // Descontar stock solo de productos normales
-      for (const p of pedidoTemporal.filter(p => p.tipo === "normal")) {
+      for (const p of pedidoTemporal.filter((p) => p.tipo === "normal")) {
         const { data: prodData, error: errorProd } = await supabase
           .from("productos")
           .select("stock_actual")
@@ -179,7 +194,9 @@ export default function ModalAgregarPedido({ idMesa, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white p-6 rounded-lg w-auto">
-        <h2 className="text-lg font-bold mb-4">Agregar productos a mesa {idMesa}</h2>
+        <h2 className="text-lg font-bold mb-4">
+          Agregar productos a mesa {idMesa}
+        </h2>
 
         {/* Categorías con dropdown */}
         <div className="mb-3 grid grid-cols-3 gap-x-8 w-full">
@@ -187,7 +204,9 @@ export default function ModalAgregarPedido({ idMesa, onClose }) {
             <div key={categoria} className="mb-2 flex flex-col">
               <button
                 onClick={() =>
-                  setCategoriaAbierta(categoriaAbierta === categoria ? null : categoria)
+                  setCategoriaAbierta(
+                    categoriaAbierta === categoria ? null : categoria
+                  )
                 }
                 className="w-full flex justify-between items-center bg-gray-200 px-3 py-2 rounded"
               >
@@ -200,14 +219,22 @@ export default function ModalAgregarPedido({ idMesa, onClose }) {
                   {prods.map((p) => (
                     <li
                       key={`${p.tipo}-${p.id_producto}`}
-                      onClick={() => setSelectedProducto({ id_producto: p.id_producto, tipo: p.tipo })}
+                      onClick={() =>
+                        setSelectedProducto({
+                          id_producto: p.id_producto,
+                          tipo: p.tipo,
+                        })
+                        
+                      }
                       className={`px-3 py-1 cursor-pointer hover:bg-blue-100 ${
-                        selectedProducto?.id_producto === p.id_producto && selectedProducto?.tipo === p.tipo
+                        selectedProducto?.id_producto === p.id_producto &&
+                        selectedProducto?.tipo === p.tipo
                           ? "bg-blue-200"
                           : ""
                       }`}
                     >
-                      {p.nombre} — ${p.precio} {p.tipo !== "normal" ? `(${p.tipo})` : ""}
+                      {p.nombre} — ${p.precio}{" "}
+                      {p.tipo !== "normal" ? `(${p.tipo})` : ""}
                     </li>
                   ))}
                 </ul>
@@ -217,15 +244,15 @@ export default function ModalAgregarPedido({ idMesa, onClose }) {
         </div>
 
         {/* Input cantidad */}
-        <input
-          type="number"
-          min="1"
-          value={cantidad}
-          onChange={(e) => setCantidad(Number(e.target.value))}
-          className="border p-2 w-full mb-3"
-        />
+        <div className="flex mb-3 justify-between ">
+          <input
+            type="number"
+            min="1"
+            value={cantidad}
+            onChange={(e) => setCantidad(Number(e.target.value))}
+            className="border p-2 "
+          />
 
-        <div className="flex justify-between mb-3">
           <button
             onClick={agregarAlPedidoTemporal}
             className="px-4 py-2 bg-green-500 text-white rounded"
@@ -245,7 +272,9 @@ export default function ModalAgregarPedido({ idMesa, onClose }) {
                 <li key={`${p.tipo}-${idx}`} className="flex justify-between">
                   {p.nombre} x {p.cantidad} — ${p.precio_unitario}
                   <button
-                    onClick={() => eliminarProductoTemporal(p.id_producto, p.tipo)}
+                    onClick={() =>
+                      eliminarProductoTemporal(p.id_producto, p.tipo)
+                    }
                     className="text-red-500 ml-2"
                   >
                     ✕
@@ -267,7 +296,3 @@ export default function ModalAgregarPedido({ idMesa, onClose }) {
     </div>
   );
 }
-
-
-
-
