@@ -12,14 +12,12 @@ export default function ModalAgregarPedido({ idMesa, onClose }) {
   useEffect(() => {
     const fetchProductos = async () => {
       try {
-        // Productos normales
         const { data: productosData, error: errorProd } = await supabase
           .from("productos")
           .select("*")
           .eq("activo", true);
         if (errorProd) throw errorProd;
 
-        // Covers viernes con join para traer nombre y categoría
         const { data: viernesData, error: errorViernes } = await supabase.from(
           "covers_viernes"
         ).select(`
@@ -29,7 +27,6 @@ export default function ModalAgregarPedido({ idMesa, onClose }) {
           `);
         if (errorViernes) throw errorViernes;
 
-        // Covers sábado con join
         const { data: sabadoData, error: errorSabado } = await supabase.from(
           "covers_sabado"
         ).select(`
@@ -39,7 +36,6 @@ export default function ModalAgregarPedido({ idMesa, onClose }) {
           `);
         if (errorSabado) throw errorSabado;
 
-        // Combinar productos normales + covers
         const productosCombinados = [
           ...productosData.map((p) => ({
             ...p,
@@ -72,7 +68,6 @@ export default function ModalAgregarPedido({ idMesa, onClose }) {
     fetchProductos();
   }, []);
 
-  // Agrupar productos por categoría
   const productosPorCategoria = productos.reduce((acc, p) => {
     const cat = p.categoria || "Sin categoría";
     if (!acc[cat]) acc[cat] = [];
@@ -80,7 +75,6 @@ export default function ModalAgregarPedido({ idMesa, onClose }) {
     return acc;
   }, {});
 
-  // Agregar al pedido temporal
   const agregarAlPedidoTemporal = () => {
     if (!selectedProducto) return alert("Selecciona un producto");
 
@@ -164,7 +158,6 @@ export default function ModalAgregarPedido({ idMesa, onClose }) {
         .insert(detalleInsert);
       if (errorDetalle) throw errorDetalle;
 
-      // Descontar stock solo de productos normales
       for (const p of pedidoTemporal.filter((p) => p.tipo === "normal")) {
         const { data: prodData, error: errorProd } = await supabase
           .from("productos")
@@ -198,50 +191,61 @@ export default function ModalAgregarPedido({ idMesa, onClose }) {
           Agregar productos a mesa {idMesa}
         </h2>
 
-        {/* Categorías con dropdown */}
+        {/* Categorías con modal */}
         <div className="mb-3 grid grid-cols-3 gap-x-8 w-full">
-          {Object.entries(productosPorCategoria).map(([categoria, prods]) => (
+          {Object.entries(productosPorCategoria).map(([categoria]) => (
             <div key={categoria} className="mb-2 flex flex-col">
               <button
-                onClick={() =>
-                  setCategoriaAbierta(
-                    categoriaAbierta === categoria ? null : categoria
-                  )
-                }
+                onClick={() => setCategoriaAbierta(categoria)}
                 className="w-full flex justify-between items-center bg-gray-200 px-3 py-2 rounded"
               >
                 <span>{categoria}</span>
-                <span>{categoriaAbierta === categoria ? "▲" : "▼"}</span>
+                <span>▶</span>
               </button>
-
-              {categoriaAbierta === categoria && (
-                <ul className="border rounded mt-1 max-h-32 overflow-y-auto">
-                  {prods.map((p) => (
-                    <li
-                      key={`${p.tipo}-${p.id_producto}`}
-                      onClick={() =>
-                        setSelectedProducto({
-                          id_producto: p.id_producto,
-                          tipo: p.tipo,
-                        })
-                        
-                      }
-                      className={`px-3 py-1 cursor-pointer hover:bg-blue-100 ${
-                        selectedProducto?.id_producto === p.id_producto &&
-                        selectedProducto?.tipo === p.tipo
-                          ? "bg-blue-200"
-                          : ""
-                      }`}
-                    >
-                      {p.nombre} — ${p.precio}{" "}
-                      {p.tipo !== "normal" ? `(${p.tipo})` : ""}
-                    </li>
-                  ))}
-                </ul>
-              )}
             </div>
           ))}
         </div>
+
+        {/* Modal productos por categoría */}
+        {categoriaAbierta && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-lg shadow-lg w-96">
+              <h3 className="text-lg font-bold mb-3">{categoriaAbierta}</h3>
+
+              <ul className="max-h-60 overflow-y-auto border rounded">
+                {productosPorCategoria[categoriaAbierta].map((p) => (
+                  <li
+                    key={`${p.tipo}-${p.id_producto}`}
+                    onClick={() =>
+                      setSelectedProducto({
+                        id_producto: p.id_producto,
+                        tipo: p.tipo,
+                      })
+                    }
+                    className={`px-3 py-2 cursor-pointer hover:bg-blue-100 ${
+                      selectedProducto?.id_producto === p.id_producto &&
+                      selectedProducto?.tipo === p.tipo
+                        ? "bg-blue-200"
+                        : ""
+                    }`}
+                  >
+                    {p.nombre} — ${p.precio}{" "}
+                    {p.tipo !== "normal" ? `(${p.tipo})` : ""}
+                  </li>
+                ))}
+              </ul>
+
+              <div className="flex justify-end mt-4">
+                <button
+                  onClick={() => setCategoriaAbierta(null)}
+                  className="px-4 py-2 bg-gray-300 rounded"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Input cantidad */}
         <div className="flex mb-3 justify-between ">
@@ -296,3 +300,4 @@ export default function ModalAgregarPedido({ idMesa, onClose }) {
     </div>
   );
 }
+
